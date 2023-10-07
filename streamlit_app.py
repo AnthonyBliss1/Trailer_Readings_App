@@ -366,36 +366,40 @@ if authenticate_user():
     
 
         def get_all_burn_rates(data, trailer_pressure_column):
-            # Ensure 'Date' is in datetime format
-            data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
-
+            # Ensure 'DateTime' is in datetime format
+            data['DateTime'] = pd.to_datetime(data['DateTime'], errors='coerce')
             # Sort the DataFrame by Date in ascending order
-            data = data.sort_values(by='Date')
-            
+            data = data.sort_values(by='DateTime')
             all_burn_rates = []
+
+            # Define pressure thresholds as per requirement
+            high_pressure_threshold = 3500  # Example value
+            low_pressure_threshold = 240    # Example value
             
+            # Iterate through data
             for i in range(len(data)):
-                if (data.iloc[i][trailer_pressure_column] <= 240 and 
-                    data.iloc[i][trailer_pressure_column] != 0 and
-                    data.iloc[i]['Offline'] != 1):
+                # Ensure pressure is nonzero and online
+                is_online = data.iloc[i]['Offline'] != 1
+                is_nonzero_pressure = abs(data.iloc[i][trailer_pressure_column]) > 1e-10
+                
+                if is_online and is_nonzero_pressure:
+                    # Check if pressure is below low threshold
+                    is_low_pressure = data.iloc[i][trailer_pressure_column] <= low_pressure_threshold
+                    
+                    if is_low_pressure:
+                        # Identify the previous high-pressure index
+                        high_pressure_idx = data.loc[:i][(data[trailer_pressure_column] >= high_pressure_threshold) & 
+                                                        (data['Offline'] != 1)].index.max()
+                        
+                        if not pd.isna(high_pressure_idx):
+                            # Calculate time and pressure differences
+                            time_diff = (data.loc[i, 'DateTime'] - data.loc[high_pressure_idx, 'DateTime']).total_seconds() / 3600.0
+                            pressure_diff = data.loc[high_pressure_idx, trailer_pressure_column] - data.loc[i, trailer_pressure_column]
 
-                    high_pressure_idx = data.loc[:i][(data[trailer_pressure_column] >= 3000) & (data['Offline'] != 1)].index.max()
-                    
-                    if np.isnan(high_pressure_idx):
-                        continue
-                    
-                    time_diff = (data.loc[i, 'DateTime'] - data.loc[high_pressure_idx, 'DateTime']).total_seconds() / 3600.0
-                    
-                    # Ensure time_diff is non-zero before calculating burn_rate
-                    if time_diff == 0:
-                        burn_rate = np.nan  # or handle as preferred
-                    else:
-                        pressure_diff = data.loc[high_pressure_idx, trailer_pressure_column] - data.loc[i, trailer_pressure_column]
-                        burn_rate = pressure_diff / time_diff
-                    
-                    all_burn_rates.append((data.loc[i, 'Date'], burn_rate))
-            
-
+                            # Ensure time_diff is non-zero before calculating burn_rate
+                            if time_diff != 0:
+                                burn_rate = pressure_diff / time_diff
+                                all_burn_rates.append((data.loc[i, 'DateTime'], burn_rate))
             return all_burn_rates
 
     
