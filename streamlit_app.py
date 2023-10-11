@@ -93,7 +93,7 @@ def display_trailer_info(trailer_number, recent_pressure, line_chart, last_time_
         st.markdown("<br>", unsafe_allow_html=True) 
         st.markdown("<br>", unsafe_allow_html=True) 
         st.markdown(f"**Last time full:** {get_last_time_full(data, f'Trailer_{trailer_number}_Pressure')}")
-        st.markdown(f"**Current burn rate (hrs):** {current_burn_rate}")
+        st.markdown(f"**Current burn rate (psi/hr):** {current_burn_rate}")
         st.markdown(f"**Remaining Fuel (hrs):** {remaining_fuel}")
         # Display the status with the appropriate color
         st.markdown(f"**Status:** <span style='color: {color};'>{status}</span>", unsafe_allow_html=True)
