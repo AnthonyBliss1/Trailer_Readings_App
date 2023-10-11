@@ -36,10 +36,10 @@ def load_data(query, engine):
 
 
 def format_data(data):
-    # Convert 'Date' to datetime and format it as 'mm/dd/yyyy'
+    # Convert Date to datetime and format it as 'mm/dd/yyyy'
     data['Date'] = pd.to_datetime(data['Date']).dt.strftime('%m/%d/%Y')
     
-    # Convert 'Time' column to a string representation
+    # Convert Time column to a string representation
     data['Time'] = data['Time'].apply(lambda x: str(x).split(' ')[2])
     
     return data
@@ -60,7 +60,6 @@ def create_gauge(label, value, min_value=240, max_value=3000):
 
 
 def get_value_for_label(data, label):
-    # Filter the DataFrame for the given label and get the last value in the 'value' column
     value = data[data['label'] == label]['value'].iloc[-1] if not data[data['label'] == label].empty else 0
     return value
 
@@ -68,7 +67,7 @@ def get_value_for_label(data, label):
 def create_line_chart(data, y_column, width=400, height=300):
     fig = px.line(data, x='Datetime', y=y_column, labels={y_column: 'Pressure'})
     fig.update_layout(
-        margin=dict(t=40, b=40),  # Adjust top (t) margin to be minimal
+        margin=dict(t=40, b=40),  
         width=width,
         height=height
     )
@@ -76,7 +75,7 @@ def create_line_chart(data, y_column, width=400, height=300):
 
 
 def display_trailer_info(trailer_number, recent_pressure, line_chart, last_time_full, current_burn_rate, remaining_fuel, status):
-    main_columns = st.columns([1, 2, 1])  # Adjust the width of the columns
+    main_columns = st.columns([1, 2, 1]) 
 
     # Gauge Column
     with main_columns[0]:
@@ -101,32 +100,32 @@ def display_trailer_info(trailer_number, recent_pressure, line_chart, last_time_
 
 
 def get_last_time_full(data, label):
-    # Ensure 'Date' is in datetime format and create a 'DateTime' column
+    # Ensure Date is in ormat and create a DateTime column
     data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
     data['Time'] = pd.to_timedelta(data['Time'])
     data['DateTime'] = data['Date'] + data['Time']
-    # Filter the DataFrame for rows where the pressure was >= 3000 and 'Offline' is 0 (Online)
+    # Filter the DataFrame for rows where the pressure was >= 3000 andOffline is 0 (Online)
     filtered_data = data[(data[label] >= 3000) & (data['Offline'] == 0)]
 
     if not filtered_data.empty:
         # Get the last row where the condition was met
         last_row = filtered_data.iloc[-1]
         
-        # Format 'DateTime' as 'mm/dd/yyyy - HH:MM:SS' and return
+        # Format DateTime
         return last_row['DateTime'].strftime('%m/%d/%Y - %H:%M:%S')
     else:
         return "N/A"
 
 
 def get_current_burn_rate(data, trailer_pressure_column):
-    # Ensure 'Date' and 'Time' are in datetime format and handle parsing errors
+    # Ensure Date and Time are in datetime format 
     data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
     data['Time'] = pd.to_timedelta(data['Time'].astype(str), errors='coerce')
     
-    # Merge 'Date' and 'Time' into a single 'DateTime' column
+    # Merge Date and Time
     data['DateTime'] = data['Date'] + data['Time']
 
-    # Handle rows with NaT in 'DateTime'
+    # Handle rows with NaT 
     data = data.dropna(subset=['DateTime'])
 
     # Sort the DataFrame by DateTime in descending order
@@ -137,7 +136,7 @@ def get_current_burn_rate(data, trailer_pressure_column):
                             (data[trailer_pressure_column] != 0) & 
                             (data['Offline'] != 1)].index.min()
 
-    # If no such instance is found, return np.nan
+    # If not found, return np.nan
     if np.isnan(low_pressure_idx):
         return np.nan
 
@@ -145,7 +144,7 @@ def get_current_burn_rate(data, trailer_pressure_column):
     high_pressure_idx = data.loc[low_pressure_idx:][(data[trailer_pressure_column] >= 3000) & 
                                                      (data['Offline'] != 1)].index.max()
 
-    # If no such instance is found, return np.nan
+    # If not found, return np.nan
     if np.isnan(high_pressure_idx):
         return np.nan
 
@@ -171,7 +170,7 @@ def get_avg_burn_rate(data, trailer_pressure_column):
     # Iterate over the rows of the DataFrame
     for i in range(1, len(data)):
         # If the current row has pressure >= 3000 and the next row has pressure <= 240
-        # and 'Offline' is 0 for both rows
+        # and Offline is 0 for both rows
         if (data.iloc[i-1][trailer_pressure_column] >= 3000 and data.iloc[i][trailer_pressure_column] <= 240
             and data.iloc[i-1]['Offline'] == 0 and data.iloc[i]['Offline'] == 0):
             # Calculate the time difference between the two rows in hours
@@ -186,7 +185,7 @@ def get_avg_burn_rate(data, trailer_pressure_column):
 
 
 def get_remaining_fuel(current_pressure, burn_rate):
-    # If burn_rate is 'N/A' or 0, return 'N/A'
+    # If burn_rate is N/A or 0, return N/A
     if burn_rate == 'N/A' or burn_rate == 0:
         return 'N/A'
     
@@ -195,10 +194,10 @@ def get_remaining_fuel(current_pressure, burn_rate):
 
 
 def get_status(data):
-    # Get the most recent 'Offline' value
+    # Get the most recent Offline value
     most_recent_offline_value = data['Offline'].iloc[-1] if not data.empty else None
     
-    # Determine the status and color based on the most recent 'Offline' value
+    # Determine the status and color based on the most recent Offline value
     if most_recent_offline_value is not None:
         status = 'Offline' if most_recent_offline_value == 1 else 'Online'
         color = 'red' if most_recent_offline_value == 1 else 'green'
@@ -208,7 +207,7 @@ def get_status(data):
     
 
 def get_latest_non_zero_pressure(data, trailer_pressure_column):
-    for pressure in data[trailer_pressure_column][::-1]:  # Iterating backwards
+    for pressure in data[trailer_pressure_column][::-1]: 
         if pressure != 0:
             return pressure
     return None
@@ -259,11 +258,11 @@ if authenticate_user():
         "Analysis 📈": "analysis"
     }
 
-    # Get the current selected page from the query params
+    # Get the current selected page
     query_params = st.experimental_get_query_params()
     current_page = query_params.get("page", ["dashboard"])[0]
 
-    # Display the tabs in the sidebar and let the user select
+    # Display the tabs in the sidebar 
     selected_page = st.sidebar.radio("Choose a page:", options=list(pages.keys()), index=list(pages.values()).index(current_page))
 
     # Set the query param for the selected page
@@ -283,29 +282,28 @@ if authenticate_user():
         recent_trailer_3_pressure = get_latest_non_zero_pressure(data, 'Trailer_3_Pressure')
 
 
-        # Calculate 'last_time_full' for each trailer
+        # Calculate last_time_full for each trailer
         last_time_full_1 = get_last_time_full(data, 'Trailer_1_Pressure')
         last_time_full_2 = get_last_time_full(data, 'Trailer_2_Pressure')
         last_time_full_3 = get_last_time_full(data, 'Trailer_3_Pressure')
 
-        # Calculate 'current_burn_rate' for each trailer
+        # Calculate current_burn_rate for each trailer
         current_burn_rate_1 = get_current_burn_rate(data, 'Trailer_1_Pressure')
         current_burn_rate_2 = get_current_burn_rate(data, 'Trailer_2_Pressure')
         current_burn_rate_3 = get_current_burn_rate(data, 'Trailer_3_Pressure')
 
-        # Calculate 'remaining_fuel' for each trailer
+        # Calculate remaining_fuel for each trailer
         remaining_fuel_1 = get_remaining_fuel(recent_trailer_1_pressure, current_burn_rate_1)
         remaining_fuel_2 = get_remaining_fuel(recent_trailer_2_pressure, current_burn_rate_2)
         remaining_fuel_3 = get_remaining_fuel(recent_trailer_3_pressure, current_burn_rate_3)
 
-        # Calculate 'status' and 'color' for each trailer
+        # Calculate status and color for each trailer
         status, color = get_status(data)
 
-        # Convert 'Time' to a recognizable time format
+        # Convert Time
         data['Time'] = data['Time'].apply(lambda x: str(x).split(' ')[2] if 'days' in str(x) else str(x))
-        # Concatenate 'Date' and 'Time' and convert to 'Datetime'
         data['Datetime'] = pd.to_datetime(data['Date'].astype(str) + ' ' + data['Time'].astype(str))
-        # Filter DataFrame where 'Offline' is '0' to not plot 'Offline' points
+        # Filter DataFrame where Offline is '0' to not plot Offline points
         filtered_data_1 = data[(data['Offline'] == 0) & (data["Trailer_1_Pressure"] != 0)]
         filtered_data_2 = data[(data['Offline'] == 0) & (data["Trailer_2_Pressure"] != 0)]
         filtered_data_3 = data[(data['Offline'] == 0) & (data["Trailer_3_Pressure"] != 0)]
@@ -352,7 +350,7 @@ if authenticate_user():
 
         col1, col2 = st.columns(2)
 
-        # Convert Date and Time columns to string type if they are not already
+        # Convert Date and Time columns to string type
         data['Date'] = data['Date'].astype(str)
         data['Time'] = data['Time'].astype(str) 
         # Combine Date and Time into a single datetime column
@@ -366,13 +364,13 @@ if authenticate_user():
     
 
         def get_all_burn_rates(data, trailer_pressure_column):
-            # Ensure 'DateTime' is in datetime format
+            # Ensure DateTime is in datetime format
             data['DateTime'] = pd.to_datetime(data['DateTime'], errors='coerce')
             # Sort the DataFrame by Date in ascending order
             data = data.sort_values(by='DateTime')
             all_burn_rates = []
 
-            # Define pressure thresholds as per requirement
+            # Define pressure thresholds
             high_pressure_threshold = 3000
             low_pressure_threshold = 240    
             
@@ -450,9 +448,9 @@ if authenticate_user():
             for i, trailer_pressure_column in enumerate(['Trailer_1_Pressure', 'Trailer_2_Pressure', 'Trailer_3_Pressure'], 1):
                 burn_rates = get_all_burn_rates(data, trailer_pressure_column)
                 burn_rate_df = pd.DataFrame(burn_rates, columns=['Date', 'BurnRate'])
-                # Ensure 'Date' is in datetime format
+                # Ensure Date is in datetime format
                 burn_rate_df['Date'] = pd.to_datetime(burn_rate_df['Date'])
-                avg_temp['Date'] = pd.to_datetime(avg_temp['Date'])  # Ensure avg_temp 'Date' is also in datetime format
+                avg_temp['Date'] = pd.to_datetime(avg_temp['Date']) 
                 merged_data = pd.merge(burn_rate_df, avg_temp, on='Date', how='inner')
                 merged_data['Trailer'] = f'Trailer {i}'
                 all_data = pd.concat([all_data, merged_data], ignore_index=True)
@@ -500,13 +498,13 @@ if authenticate_user():
                     min_burn_rate, min_burn_rate_date = min(all_burn_rates, key=lambda x: x[1])
                     max_burn_rate, max_burn_rate_date = max(all_burn_rates, key=lambda x: x[1])
                     
-                    # Convert potential string dates to datetime, if not already in datetime format
+                    # Convert string dates to datetime
                     if not isinstance(min_burn_rate_date, pd.Timestamp):
                         min_burn_rate_date = pd.to_datetime(min_burn_rate_date, errors='coerce')
                     if not isinstance(max_burn_rate_date, pd.Timestamp):
                         max_burn_rate_date = pd.to_datetime(max_burn_rate_date, errors='coerce')
                     
-                    # Generate and display formatted date strings or 'N/A' if invalid
+                    # Generate and display formatted date strings or N/A if invalid
                     min_date_str = min_burn_rate_date.strftime('%Y-%m-%d') if pd.notnull(min_burn_rate_date) else 'N/A'
                     max_date_str = max_burn_rate_date.strftime('%Y-%m-%d') if pd.notnull(max_burn_rate_date) else 'N/A'
                     
@@ -521,5 +519,5 @@ if authenticate_user():
                 else:
                     st.markdown(f"<p style='text-align: center;'>No burn rate data available for {trailer_column.replace('_', ' ')}.</p>", unsafe_allow_html=True)
 
-                # Add a separator line between different trailers' data
+                # Add a separator line between different trailer data
                 st.write("---")
