@@ -373,8 +373,8 @@ if authenticate_user():
             all_burn_rates = []
 
             # Define pressure thresholds as per requirement
-            high_pressure_threshold = 3500  # Example value
-            low_pressure_threshold = 240    # Example value
+            high_pressure_threshold = 3000
+            low_pressure_threshold = 240    
             
             # Iterate through data
             for i in range(len(data)):
