@@ -358,40 +358,39 @@ if authenticate_user():
     
 
         def get_all_burn_rates(data, trailer_pressure_column):
-            # Ensure DateTime is in datetime format
-            data['DateTime'] = pd.to_datetime(data['DateTime'], errors='coerce')
-            # Sort the DataFrame by Date in ascending order
+            data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+            data['Time'] = pd.to_timedelta(data['Time'].astype(str), errors='coerce')
+            data['DateTime'] = data['Date'] + data['Time']
             data = data.sort_values(by='DateTime')
-            all_burn_rates = []
-
-            # Define pressure thresholds
-            high_pressure_threshold = 3000
-            low_pressure_threshold = 240    
             
-            # Iterate through data
-            for i in range(len(data)):
-                # Ensure pressure is nonzero and online
-                is_online = data.iloc[i]['Offline'] != 1
-                is_nonzero_pressure = abs(data.iloc[i][trailer_pressure_column]) > 1e-10
-                
-                if is_online and is_nonzero_pressure:
-                    # Check if pressure is below low threshold
-                    is_low_pressure = data.iloc[i][trailer_pressure_column] <= low_pressure_threshold
+            all_burn_rates = []
+            last_high_pressure_index = None
+            
+            for _, low_pressure_row in data.iterrows():
+                if (low_pressure_row[trailer_pressure_column] <= 240) and (low_pressure_row[trailer_pressure_column] != 0) and (low_pressure_row['Offline'] != 1):
+                    # Find potential high pressure rows before the current low pressure.
+                    potential_high_pressure_rows = data[(data['DateTime'] < low_pressure_row['DateTime']) & (data[trailer_pressure_column] >= 3000)]
                     
-                    if is_low_pressure:
-                        # Identify the previous high-pressure index
-                        high_pressure_idx = data.loc[:i][(data[trailer_pressure_column] >= high_pressure_threshold) & 
-                                                        (data['Offline'] != 1)].index.max()
-                        
-                        if not pd.isna(high_pressure_idx):
-                            # Calculate time and pressure differences
-                            time_diff = (data.loc[i, 'DateTime'] - data.loc[high_pressure_idx, 'DateTime']).total_seconds() / 3600.0
-                            pressure_diff = data.loc[high_pressure_idx, trailer_pressure_column] - data.loc[i, trailer_pressure_column]
+                    # Exclude previously used high pressure if one exists.
+                    if last_high_pressure_index is not None:
+                        potential_high_pressure_rows = potential_high_pressure_rows[potential_high_pressure_rows.index > last_high_pressure_index]
 
-                            # Ensure time_diff is non-zero before calculating burn_rate
-                            if time_diff != 0:
-                                burn_rate = pressure_diff / time_diff
-                                all_burn_rates.append((data.loc[i, 'DateTime'], burn_rate))
+                    if not potential_high_pressure_rows.empty:
+                        high_pressure_row = potential_high_pressure_rows.iloc[-1]
+                        time_diff = (low_pressure_row['DateTime'] - high_pressure_row['DateTime']).total_seconds() / 3600.0
+                        pressure_diff = high_pressure_row[trailer_pressure_column] - low_pressure_row[trailer_pressure_column]
+                        burn_rate = pressure_diff / time_diff
+                        avg_temp = data[
+                            (data['DateTime'] >= high_pressure_row['DateTime']) &
+                            (data['DateTime'] <= low_pressure_row['DateTime'])
+                        ]['Temperature'].mean()
+                        all_burn_rates.append({
+                            'Date': low_pressure_row['Date'],
+                            'Burn Rate': burn_rate,
+                            'Average Temperature': avg_temp
+                        })
+                        last_high_pressure_index = high_pressure_row.name
+                        
             return all_burn_rates
 
     
@@ -409,10 +408,10 @@ if authenticate_user():
                 if row['Offline'] == 1:
                     # If this is the first offline entry in a sequence, record the start time
                     if offline_start_time is None:
-                        offline_start_time = pd.to_datetime(f"{row['Date']} {str(row['Time']).replace(' 0 days', '')}")
+                        offline_start_time = row['Date'] + pd.to_timedelta(row['Time'])
                 # If the current entry is online and there was an offline period before, calculate the duration
                 elif offline_start_time is not None:
-                    offline_end_time = pd.to_datetime(f"{row['Date']} {str(row['Time']).replace(' 0 days', '')}")
+                    offline_end_time = row['Date'] + pd.to_timedelta(row['Time'])
                     current_duration = offline_end_time - offline_start_time
                     # Update max_duration if the current_duration is longer
                     if current_duration > max_duration:
@@ -422,12 +421,16 @@ if authenticate_user():
             
             # Convert max_duration to hours and return it
             return max_duration.total_seconds() / 3600.0
-   
+
 
         def create_scatter_plot(merged_data):
-            fig = px.scatter(merged_data, x='BurnRate', y='Temperature', color='Trailer', title='Burn Rate vs Average Temperature')
-            fig.update_layout(xaxis_title='Burn Rate', yaxis_title='Average Temperature', showlegend = True)
-            st.plotly_chart(fig, use_container_width = True)
+            # Check if merged_data is not empty
+            if not merged_data.empty:
+                fig = px.scatter(merged_data, x='Burn Rate', y='Average Temperature', color='Trailer', title='Burn Rate vs Average Temperature')
+                fig.update_layout(xaxis_title='Burn Rate', yaxis_title='Average Temperature', showlegend=True)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("No data available for scatter plot.")
 
         # Calculate average temperature
         avg_temp = data.groupby('Date')['Temperature'].mean().reset_index()
@@ -441,7 +444,12 @@ if authenticate_user():
         with col1:
             for i, trailer_pressure_column in enumerate(['Trailer_1_Pressure', 'Trailer_2_Pressure', 'Trailer_3_Pressure'], 1):
                 burn_rates = get_all_burn_rates(data, trailer_pressure_column)
-                burn_rate_df = pd.DataFrame(burn_rates, columns=['Date', 'BurnRate'])
+                    # Debugging: Check the first item in burn_rates
+                if not burn_rates:
+                    print(f"No burn rates found for {trailer_pressure_column}.")
+                    continue
+                burn_rate_df = pd.DataFrame(burn_rates)  # Columns are already named in get_all_burn_rates function, no need to redefine
+                
                 # Ensure Date is in datetime format
                 burn_rate_df['Date'] = pd.to_datetime(burn_rate_df['Date'])
                 avg_temp['Date'] = pd.to_datetime(avg_temp['Date']) 
@@ -458,7 +466,7 @@ if authenticate_user():
             # Line Graph (Burn Rate over Time)
             for trailer in all_data['Trailer'].unique():
                 filtered_data = all_data[all_data['Trailer'] == trailer]
-                fig.add_trace(go.Scatter(x=filtered_data['Date'], y=filtered_data['BurnRate'], name=trailer), row=1, col=1)
+                fig.add_trace(go.Scatter(x=filtered_data['Date'], y=filtered_data['Burn Rate'], name=trailer), row=1, col=1)
 
             # Line Graph (Avg Temperature Over Time)
             avg_temp_per_day = data.groupby('Date')['Temperature'].mean().reset_index()
@@ -489,8 +497,14 @@ if authenticate_user():
                 # Check if there are any burn rates to analyze
                 if all_burn_rates:
                     # Find the minimum and maximum burn rates along with their corresponding dates
-                    min_burn_rate, min_burn_rate_date = min(all_burn_rates, key=lambda x: x[1])
-                    max_burn_rate, max_burn_rate_date = max(all_burn_rates, key=lambda x: x[1])
+                    min_burn_rate_info = min(all_burn_rates, key=lambda x: x['Burn Rate'])
+                    max_burn_rate_info = max(all_burn_rates, key=lambda x: x['Burn Rate'])
+
+                    min_burn_rate = min_burn_rate_info['Burn Rate']
+                    min_burn_rate_date = min_burn_rate_info['Date']
+                    max_burn_rate = max_burn_rate_info['Burn Rate']
+                    max_burn_rate_date = max_burn_rate_info['Date']
+
                     
                     # Convert string dates to datetime
                     if not isinstance(min_burn_rate_date, pd.Timestamp):
@@ -499,15 +513,12 @@ if authenticate_user():
                         max_burn_rate_date = pd.to_datetime(max_burn_rate_date, errors='coerce')
                     
                     # Generate and display formatted date strings or N/A if invalid
-                    min_date_str = min_burn_rate_date.strftime('%Y-%m-%d') if pd.notnull(min_burn_rate_date) else 'N/A'
-                    max_date_str = max_burn_rate_date.strftime('%Y-%m-%d') if pd.notnull(max_burn_rate_date) else 'N/A'
+                    min_date_str = min_burn_rate_date.strftime('%m/%d/%Y') if pd.notnull(min_burn_rate_date) else 'N/A'
+                    max_date_str = max_burn_rate_date.strftime('%m/%d/%Y') if pd.notnull(max_burn_rate_date) else 'N/A'
                     
                     # Display the trailer name, minimum, and maximum burn rates in Streamlit
                     st.markdown(f"<p style='text-align: center;'>Minimum burn rate: {min_burn_rate:.2f} on {min_date_str}</p>", unsafe_allow_html=True)
                     st.markdown(f"<p style='text-align: center;'>Maximum burn rate: {max_burn_rate:.2f} on {max_date_str}</p>", unsafe_allow_html=True)
-                    #print("Min burn rate:", min_burn_rate, "on", min_burn_rate_date)
-                    #print(min(all_burn_rates, key=lambda x: x[1]))
-                    #print(max(all_burn_rates, key=lambda x: x[1]))
 
 
                 else:
@@ -515,3 +526,4 @@ if authenticate_user():
 
                 # Add a separator line between different trailer data
                 st.write("---")
+
