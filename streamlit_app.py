@@ -36,7 +36,7 @@ def load_data(query, engine):
 
 
 def format_data(data):
-    # Convert Date to datetime and format it as 'mm/dd/yyyy'
+    # Convert Date to datetime and format
     data['Date'] = pd.to_datetime(data['Date']).dt.strftime('%m/%d/%Y')
     
     # Convert Time column to a string representation
@@ -100,11 +100,11 @@ def display_trailer_info(trailer_number, recent_pressure, line_chart, last_time_
 
 
 def get_last_time_full(data, label):
-    # Ensure Date is in ormat and create a DateTime column
+    # Create a DateTime column
     data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
     data['Time'] = pd.to_timedelta(data['Time'])
     data['DateTime'] = data['Date'] + data['Time']
-    # Filter the DataFrame for rows where the pressure was >= 3000 andOffline is 0 (Online)
+    # Filter the DataFrame for rows where the pressure was >= 3000 and Offline is 0
     filtered_data = data[(data[label] >= 3000) & (data['Offline'] == 0)]
 
     if not filtered_data.empty:
@@ -240,8 +240,7 @@ if authenticate_user():
         data = load_data(query, engine)
         st.success('Data refreshed successfully!')
 
-
-    # Display the Data in Streamlit
+    # Display the Data
     with st.expander("Data Log"):
         try:
             data = pd.read_sql(query, engine)
@@ -258,52 +257,47 @@ if authenticate_user():
         "Analysis 📈": "analysis"
     }
 
-    # Get the current selected page
+    # Get the current page
     query_params = st.experimental_get_query_params()
     current_page = query_params.get("page", ["dashboard"])[0]
 
     # Display the tabs in the sidebar 
     selected_page = st.sidebar.radio("Choose a page:", options=list(pages.keys()), index=list(pages.values()).index(current_page))
 
-    # Set the query param for the selected page
+    # Set the query param for the page
     if selected_page != current_page:
         st.experimental_set_query_params(page=pages[selected_page])
 
-    # Display the selected page
+    # Display the page
     if selected_page == "Dashboard 📊":
 
         st.markdown("<div style='text-align: center;'><h1>Dashboard 📊</h1></div>", unsafe_allow_html=True)
         st.markdown("<div style='padding: 10px;'></div>", unsafe_allow_html=True) #Padding under title
 
 
-        # Get the most recent non-zero pressure reading
         recent_trailer_1_pressure = get_latest_non_zero_pressure(data, 'Trailer_1_Pressure')
         recent_trailer_2_pressure = get_latest_non_zero_pressure(data, 'Trailer_2_Pressure')
         recent_trailer_3_pressure = get_latest_non_zero_pressure(data, 'Trailer_3_Pressure')
 
 
-        # Calculate last_time_full for each trailer
         last_time_full_1 = get_last_time_full(data, 'Trailer_1_Pressure')
         last_time_full_2 = get_last_time_full(data, 'Trailer_2_Pressure')
         last_time_full_3 = get_last_time_full(data, 'Trailer_3_Pressure')
 
-        # Calculate current_burn_rate for each trailer
         current_burn_rate_1 = get_current_burn_rate(data, 'Trailer_1_Pressure')
         current_burn_rate_2 = get_current_burn_rate(data, 'Trailer_2_Pressure')
         current_burn_rate_3 = get_current_burn_rate(data, 'Trailer_3_Pressure')
 
-        # Calculate remaining_fuel for each trailer
         remaining_fuel_1 = get_remaining_fuel(recent_trailer_1_pressure, current_burn_rate_1)
         remaining_fuel_2 = get_remaining_fuel(recent_trailer_2_pressure, current_burn_rate_2)
         remaining_fuel_3 = get_remaining_fuel(recent_trailer_3_pressure, current_burn_rate_3)
 
-        # Calculate status and color for each trailer
         status, color = get_status(data)
 
         # Convert Time
         data['Time'] = data['Time'].apply(lambda x: str(x).split(' ')[2] if 'days' in str(x) else str(x))
         data['Datetime'] = pd.to_datetime(data['Date'].astype(str) + ' ' + data['Time'].astype(str))
-        # Filter DataFrame where Offline is '0' to not plot Offline points
+        # Filter DataFrame where Offline is 0 to not plot Offline points
         filtered_data_1 = data[(data['Offline'] == 0) & (data["Trailer_1_Pressure"] != 0)]
         filtered_data_2 = data[(data['Offline'] == 0) & (data["Trailer_2_Pressure"] != 0)]
         filtered_data_3 = data[(data['Offline'] == 0) & (data["Trailer_3_Pressure"] != 0)]
