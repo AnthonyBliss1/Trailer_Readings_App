@@ -448,7 +448,7 @@ if authenticate_user():
                 if not burn_rates:
                     print(f"No burn rates found for {trailer_pressure_column}.")
                     continue
-                burn_rate_df = pd.DataFrame(burn_rates)  # Columns are already named in get_all_burn_rates function, no need to redefine
+                burn_rate_df = pd.DataFrame(burn_rates)
                 
                 # Ensure Date is in datetime format
                 burn_rate_df['Date'] = pd.to_datetime(burn_rate_df['Date'])
@@ -516,7 +516,7 @@ if authenticate_user():
                     min_date_str = min_burn_rate_date.strftime('%m/%d/%Y') if pd.notnull(min_burn_rate_date) else 'N/A'
                     max_date_str = max_burn_rate_date.strftime('%m/%d/%Y') if pd.notnull(max_burn_rate_date) else 'N/A'
                     
-                    # Display the trailer name, minimum, and maximum burn rates in Streamlit
+                    # Display the trailer name, minimum, and maximum burn rates
                     st.markdown(f"<p style='text-align: center;'>Minimum burn rate: {min_burn_rate:.2f} on {min_date_str}</p>", unsafe_allow_html=True)
                     st.markdown(f"<p style='text-align: center;'>Maximum burn rate: {max_burn_rate:.2f} on {max_date_str}</p>", unsafe_allow_html=True)
 
@@ -524,6 +524,6 @@ if authenticate_user():
                 else:
                     st.markdown(f"<p style='text-align: center;'>No burn rate data available for {trailer_column.replace('_', ' ')}.</p>", unsafe_allow_html=True)
 
-                # Add a separator line between different trailer data
+                # Add a separator line between trailer data
                 st.write("---")
 
