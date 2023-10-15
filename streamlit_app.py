@@ -276,6 +276,7 @@ if authenticate_user():
         last_time_full_2 = get_last_time_full(data, 'Trailer_2_Pressure')
         last_time_full_3 = get_last_time_full(data, 'Trailer_3_Pressure')
 
+        
         all_burn_rates_1 = get_all_burn_rates(data, 'Trailer_1_Pressure')
         if all_burn_rates_1:
             burn_rates_1 = pd.DataFrame(all_burn_rates_1)
@@ -296,6 +297,7 @@ if authenticate_user():
             current_burn_rate_3 = burn_rates_3.sort_values(by='Date', ascending=False).iloc[0]['Burn Rate']
         else: 
             current_burn_rate_3 = np.nan
+            
 
         remaining_fuel_1 = get_remaining_fuel(recent_trailer_1_pressure, current_burn_rate_1)
         remaining_fuel_2 = get_remaining_fuel(recent_trailer_2_pressure, current_burn_rate_2)
