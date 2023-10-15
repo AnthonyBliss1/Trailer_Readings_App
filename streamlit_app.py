@@ -117,49 +117,41 @@ def get_last_time_full(data, label):
         return "N/A"
 
 
-def get_current_burn_rate(data, trailer_pressure_column):
-    # Ensure Date and Time are in datetime format 
+def get_all_burn_rates(data, trailer_pressure_column):
     data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
     data['Time'] = pd.to_timedelta(data['Time'].astype(str), errors='coerce')
-    
-    # Merge Date and Time
     data['DateTime'] = data['Date'] + data['Time']
-
-    # Handle rows with NaT 
-    data = data.dropna(subset=['DateTime'])
-
-    # Sort the DataFrame by DateTime in descending order
-    data = data.sort_values(by='DateTime', ascending=False)
-
-    # Find the most recent time when the pressure was <= 240 and > 0
-    low_pressure_idx = data[(data[trailer_pressure_column] <= 240) & 
-                            (data[trailer_pressure_column] != 0) & 
-                            (data['Offline'] != 1)].index.min()
-
-    # If not found, return np.nan
-    if np.isnan(low_pressure_idx):
-        return np.nan
-
-    # Find the most recent time before low_pressure_idx when the pressure was >= 3000
-    high_pressure_idx = data.loc[low_pressure_idx:][(data[trailer_pressure_column] >= 3000) & 
-                                                     (data['Offline'] != 1)].index.max()
-
-    # If not found, return np.nan
-    if np.isnan(high_pressure_idx):
-        return np.nan
-
-    # Calculate the time difference between the two instances in hours
-    time_diff = (data.loc[low_pressure_idx, 'DateTime'] - data.loc[high_pressure_idx, 'DateTime']) / pd.Timedelta(hours=1)
-
-    # Ensure time_diff is non-zero before calculating burn_rate
-    if time_diff == 0:
-        return np.nan
+    data = data.sort_values(by='DateTime')
     
-    # Calculate the burn rate as the pressure drop per hour
-    pressure_diff = data.loc[high_pressure_idx, trailer_pressure_column] - data.loc[low_pressure_idx, trailer_pressure_column]
-    burn_rate = pressure_diff / time_diff
+    all_burn_rates = []
+    last_high_pressure_index = None
     
-    return burn_rate
+    for _, low_pressure_row in data.iterrows():
+        if (low_pressure_row[trailer_pressure_column] <= 240) and (low_pressure_row[trailer_pressure_column] != 0) and (low_pressure_row['Offline'] != 1):
+            # Find potential high pressure rows before the current low pressure.
+            potential_high_pressure_rows = data[(data['DateTime'] < low_pressure_row['DateTime']) & (data[trailer_pressure_column] >= 3000)]
+            
+            # Exclude previously used high pressure if one exists.
+            if last_high_pressure_index is not None:
+                potential_high_pressure_rows = potential_high_pressure_rows[potential_high_pressure_rows.index > last_high_pressure_index]
+
+            if not potential_high_pressure_rows.empty:
+                high_pressure_row = potential_high_pressure_rows.iloc[-1]
+                time_diff = (low_pressure_row['DateTime'] - high_pressure_row['DateTime']).total_seconds() / 3600.0
+                pressure_diff = high_pressure_row[trailer_pressure_column] - low_pressure_row[trailer_pressure_column]
+                burn_rate = pressure_diff / time_diff
+                avg_temp = data[
+                    (data['DateTime'] >= high_pressure_row['DateTime']) &
+                    (data['DateTime'] <= low_pressure_row['DateTime'])
+                ]['Temperature'].mean()
+                all_burn_rates.append({
+                    'Date': low_pressure_row['Date'],
+                    'Burn Rate': burn_rate,
+                    'Average Temperature': avg_temp
+                })
+                last_high_pressure_index = high_pressure_row.name
+                
+    return all_burn_rates
 
 
 def get_avg_burn_rate(data, trailer_pressure_column):
@@ -284,9 +276,26 @@ if authenticate_user():
         last_time_full_2 = get_last_time_full(data, 'Trailer_2_Pressure')
         last_time_full_3 = get_last_time_full(data, 'Trailer_3_Pressure')
 
-        current_burn_rate_1 = get_current_burn_rate(data, 'Trailer_1_Pressure')
-        current_burn_rate_2 = get_current_burn_rate(data, 'Trailer_2_Pressure')
-        current_burn_rate_3 = get_current_burn_rate(data, 'Trailer_3_Pressure')
+        all_burn_rates_1 = get_all_burn_rates(data, 'Trailer_1_Pressure')
+        if all_burn_rates_1:
+            burn_rates_1 = pd.DataFrame(all_burn_rates_1)
+            current_burn_rate_1 = burn_rates_1.sort_values(by='Date', ascending=False).iloc[0]['Burn Rate']
+        else:    
+            current_burn_rate_1 = np.nan
+
+        all_burn_rates_2 = get_all_burn_rates(data, 'Trailer_2_Pressure')
+        if all_burn_rates_2:
+            burn_rates_2 = pd.DataFrame(all_burn_rates_2)
+            current_burn_rate_2 = burn_rates_2.sort_values(by='Date', ascending=False).iloc[0]['Burn Rate']
+        else:
+            current_burn_rate_2 = np.nan
+
+        all_burn_rates_3 = get_all_burn_rates(data, 'Trailer_3_Pressure')
+        if all_burn_rates_3:
+            burn_rates_3 = pd.DataFrame(all_burn_rates_3)
+            current_burn_rate_3 = burn_rates_3.sort_values(by='Date', ascending=False).iloc[0]['Burn Rate']
+        else: 
+            current_burn_rate_3 = np.nan
 
         remaining_fuel_1 = get_remaining_fuel(recent_trailer_1_pressure, current_burn_rate_1)
         remaining_fuel_2 = get_remaining_fuel(recent_trailer_2_pressure, current_burn_rate_2)
@@ -356,43 +365,6 @@ if authenticate_user():
             fig.update_layout(xaxis_title='Date', yaxis_title='Average Temperature')
             return fig
     
-
-        def get_all_burn_rates(data, trailer_pressure_column):
-            data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
-            data['Time'] = pd.to_timedelta(data['Time'].astype(str), errors='coerce')
-            data['DateTime'] = data['Date'] + data['Time']
-            data = data.sort_values(by='DateTime')
-            
-            all_burn_rates = []
-            last_high_pressure_index = None
-            
-            for _, low_pressure_row in data.iterrows():
-                if (low_pressure_row[trailer_pressure_column] <= 240) and (low_pressure_row[trailer_pressure_column] != 0) and (low_pressure_row['Offline'] != 1):
-                    # Find potential high pressure rows before the current low pressure.
-                    potential_high_pressure_rows = data[(data['DateTime'] < low_pressure_row['DateTime']) & (data[trailer_pressure_column] >= 3000)]
-                    
-                    # Exclude previously used high pressure if one exists.
-                    if last_high_pressure_index is not None:
-                        potential_high_pressure_rows = potential_high_pressure_rows[potential_high_pressure_rows.index > last_high_pressure_index]
-
-                    if not potential_high_pressure_rows.empty:
-                        high_pressure_row = potential_high_pressure_rows.iloc[-1]
-                        time_diff = (low_pressure_row['DateTime'] - high_pressure_row['DateTime']).total_seconds() / 3600.0
-                        pressure_diff = high_pressure_row[trailer_pressure_column] - low_pressure_row[trailer_pressure_column]
-                        burn_rate = pressure_diff / time_diff
-                        avg_temp = data[
-                            (data['DateTime'] >= high_pressure_row['DateTime']) &
-                            (data['DateTime'] <= low_pressure_row['DateTime'])
-                        ]['Temperature'].mean()
-                        all_burn_rates.append({
-                            'Date': low_pressure_row['Date'],
-                            'Burn Rate': burn_rate,
-                            'Average Temperature': avg_temp
-                        })
-                        last_high_pressure_index = high_pressure_row.name
-                        
-            return all_burn_rates
-
     
         def get_longest_offline_duration(data):
             # Ensure the DataFrame is sorted by Date and Time
